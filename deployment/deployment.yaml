@@ -1,0 +1,325 @@
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: microservices-demo
+---
+# Deployment con RollingUpdate (frontend)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: microservices-demo
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: juaca2004/frontendmicroservice:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: AUTH_API_ADDRESS
+              value: "http://auth-api:8000"
+            - name: TODOS_API_ADDRESS
+              value: "http://todos-api:8082"
+---
+# Deployment con Recreate (auth-api)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-api
+  namespace: microservices-demo
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: auth-api
+  template:
+    metadata:
+      labels:
+        app: auth-api
+    spec:
+      containers:
+        - name: auth-api
+          image: juaca2004/authapi:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: AUTH_API_PORT
+              value: "8000"
+            - name: USERS_API_ADDRESS
+              value: "http://users-api:8083"
+            - name: JWT_SECRET
+              value: "myfancysecret"
+---
+# Service para frontend
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: microservices-demo
+spec:
+  selector:
+    app: frontend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
+---
+# Service para auth-api
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-api
+  namespace: microservices-demo
+spec:
+  selector:
+    app: auth-api
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+---
+# NetworkPolicy: Denegar todo el tráfico entrante a Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-redis
+  namespace: microservices-demo
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+---
+# NetworkPolicy: Permitir solo a APIs y log-message-processor acceder a Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-redis
+  namespace: microservices-demo
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: todos-api
+        - podSelector:
+            matchLabels:
+              app: log-message-processor
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+# NetworkPolicy: Permitir solo a frontend acceder a todos-api
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-todos-api
+  namespace: microservices-demo
+spec:
+  podSelector:
+    matchLabels:
+      app: todos-api
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+      ports:
+        - protocol: TCP
+          port: 8082
+---
+# HPA para frontend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+  namespace: microservices-demo
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: frontend
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+---
+# Deployment para todos-api
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todos-api
+  namespace: microservices-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: todos-api
+  template:
+    metadata:
+      labels:
+        app: todos-api
+    spec:
+      containers:
+        - name: todos-api
+          image: juaca2004/todosapi:latest
+          ports:
+            - containerPort: 8082
+          env:
+            - name: TODO_API_PORT
+              value: "8082"
+            - name: JWT_SECRET
+              value: "myfancysecret"
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_CHANNEL
+              value: "log_channel"
+---
+# Service para todos-api
+apiVersion: v1
+kind: Service
+metadata:
+  name: todos-api
+  namespace: microservices-demo
+spec:
+  selector:
+    app: todos-api
+  ports:
+    - protocol: TCP
+      port: 8082
+      targetPort: 8082
+  type: ClusterIP
+---
+# Deployment para users-api
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: users-api
+  namespace: microservices-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: users-api
+  template:
+    metadata:
+      labels:
+        app: users-api
+    spec:
+      containers:
+        - name: users-api
+          image: juaca2004/userapi:latest
+          ports:
+            - containerPort: 8083
+          env:
+            - name: JWT_SECRET
+              value: "myfancysecret"
+            - name: SERVER_PORT
+              value: "8083"
+---
+# Service para users-api
+apiVersion: v1
+kind: Service
+metadata:
+  name: users-api
+  namespace: microservices-demo
+spec:
+  selector:
+    app: users-api
+  ports:
+    - protocol: TCP
+      port: 8083
+      targetPort: 8083
+  type: ClusterIP
+---
+# Deployment para log-message-processor
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: log-message-processor
+  namespace: microservices-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: log-message-processor
+  template:
+    metadata:
+      labels:
+        app: log-message-processor
+    spec:
+      containers:
+        - name: log-message-processor
+          image: juaca2004/logmessageprocessor:latest
+          env:
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_CHANNEL
+              value: "log_channel"
+---
+# Deployment para Redis
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: microservices-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.0
+          ports:
+            - containerPort: 6379
+---
+# Service para Redis
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: microservices-demo
+spec:
+  selector:
+    app: redis
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+  type: ClusterIP
