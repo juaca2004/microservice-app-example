@@ -80,168 +80,107 @@ docker run -p 8080:8080 frontend-service
 
 En esta etapa, configuré las variables de entorno necesarias dentro de cada contenedor según las dependencias entre servicios (por ejemplo, la URL del servicio de autenticación en el frontend).
 
+
+### 📂 **Estructura del manifiesto**
+
+El archivo `deployment.yaml` contiene los siguientes recursos de Kubernetes:
+
+1. **Namespaces:**
+   Se definen espacios de nombres aislados para cada componente:
+
+   * `frontend-ns`
+   * `auth-ns`
+   * `users-ns`
+   * `todos-ns`
+   * `redis-ns`
+   * `log-ns`
+
+2. **Deployments y Services:**
+   Cada microservicio cuenta con su propio `Deployment` y `Service` tipo `ClusterIP`, garantizando comunicación interna estable mediante `Service DNS`.
+
+3. **HPA (Horizontal Pod Autoscaler):**
+   Solo el `frontend` cuenta con un `HPA` configurado para escalar entre 2 y 5 réplicas según uso de CPU.
+
+4. **Network Policies:**
+   Se definen **políticas de red de seguridad (NetworkPolicy)** que limitan la comunicación entre servicios para reducir la superficie de ataque:
+
+   * `default-deny-all` para todos los namespaces (bloquea todo tráfico por defecto).
+   * Políticas específicas que solo permiten:
+
+     * Tráfico externo → `frontend`.
+     * `frontend` → `auth-api` y `todos-api`.
+     * `auth-api` → `users-api`.
+     * `todos-api` → `redis`.
+     * `log-message-processor` → `redis`.
+
 ---
 
-## 3. Despliegue en Kubernetes
+### 🔒 **Seguridad de red**
 
-Para orquestar los servicios y manejar la comunicación entre ellos, preparé el archivo `deployment.yaml`, que define tanto los **Deployments** como los **Services** de Kubernetes.
+El modelo de seguridad se basa en el principio de **"zero trust"**:
 
-El archivo `deployment.yaml` define todos los objetos necesarios para desplegar y orquestar mis microservicios dentro del clúster de Kubernetes.
+* Cada namespace inicia con una política de **denegación total de tráfico**.
+* Solo las rutas explícitamente autorizadas en las NetworkPolicies son permitidas.
+* Esto garantiza que cada microservicio solo pueda comunicarse con los componentes que realmente necesita.
 
-### Namespace
-Primero defino un **namespace** llamado `microservices-demo`, que me permite aislar todos los recursos del proyecto dentro del clúster.
+---
 
-### Deployments
-Cada microservicio tiene su propio **Deployment** con la configuración necesaria:
+### ⚙️ **Variables de entorno clave**
 
-- **Frontend:** Utilizo la estrategia `RollingUpdate` con 2 réplicas y un `HorizontalPodAutoscaler (HPA)` que escala de 2 a 5 pods si el uso de CPU supera el 50%.  
-- **Auth API:** Empleo la estrategia `Recreate` para garantizar que solo exista una instancia activa por el manejo de tokens.  
-- **Todos API, Users API, Log Message Processor y Redis:** Cada uno tiene su propio `Deployment` con una réplica por defecto y las variables de entorno configuradas para su comunicación interna.
+| Variable                   | Servicio                       | Descripción                         |
+| -------------------------- | ------------------------------ | ----------------------------------- |
+| `AUTH_API_ADDRESS`         | frontend                       | URL interna del servicio Auth.      |
+| `TODOS_API_ADDRESS`        | frontend                       | URL interna del servicio Todos.     |
+| `JWT_SECRET`               | auth-api, todos-api, users-api | Llave para firmar tokens JWT.       |
+| `REDIS_HOST`, `REDIS_PORT` | todos-api, log-processor       | Dirección del servicio Redis.       |
+| `REDIS_CHANNEL`            | todos-api, log-processor       | Canal para intercambio de mensajes. |
 
-### Services
-Defino un **Service** tipo `ClusterIP` para cada aplicación, permitiendo la comunicación interna entre pods:
+---
 
-- `frontend` → expone el puerto 80 (redirige al 8080 del contenedor).  
-- `auth-api`, `todos-api`, `users-api` → exponen sus respectivos puertos (`8000`, `8082`, `8083`).  
-- `redis` → disponible en el puerto `6379`.
+### 🚀 **Comandos para despliegue**
 
-Esto asegura que cada servicio pueda ser descubierto dentro del clúster mediante su nombre DNS (`<service-name>.<namespace>.svc.cluster.local`).
+Asegúrate de estar en el directorio donde se encuentra el archivo `deployment.yaml`.
 
-### Network Policies
-Configuro varias **NetworkPolicies** para reforzar la seguridad del tráfico interno:
-
-- `deny-all-redis`: Niega todo el tráfico entrante a Redis.  
-- `allow-api-to-redis`: Solo permite acceso desde `todos-api` y `log-message-processor`.  
-- `allow-frontend-to-todos-api`: Restringe el acceso a `todos-api` únicamente al `frontend`.
-
-De esta forma, solo los servicios autorizados pueden comunicarse entre sí, cumpliendo el principio de mínimo privilegio.
-
-###  Horizontal Pod Autoscaler (HPA)
-Defino un **HPA** para el `frontend` que ajusta dinámicamente el número de réplicas según el uso de CPU, mejorando la escalabilidad y la disponibilidad del servicio.
-
-
-Ejecuté el despliegue completo con el siguiente comando:
+#### 1️⃣ Crear todos los recursos
 
 ```bash
 kubectl apply -f deployment.yaml
 ```
 
-Luego verifiqué que los pods estuvieran corriendo:
+#### 2️⃣ Verificar los namespaces creados
 
 ```bash
-kubectl get pods
+kubectl get namespaces
 ```
 
-Y comprobé los servicios y sus puertos expuestos:
+#### 3️⃣ Comprobar los deployments y pods
 
 ```bash
-kubectl get svc
+kubectl get deployments --all-namespaces
+kubectl get pods --all-namespaces
 ```
 
----
-
-## 4. Explicación técnica de cada servicio
-
-### 🔹 Frontend (`frontend/Dockerfile`)
-
-Utilicé una imagen base de `node:8.17.0`.
-Configuré el entorno, instalé las dependencias con `npm install`, y realicé la construcción de la aplicación con `npm run build`.
-Finalmente, expuse el puerto `8080` y definí las siguientes variables de entorno:
-
-* `PORT=8080`
-* `AUTH_API_ADDRESS=http://127.0.0.1:8000`
-* `TODOS_API_ADDRESS=http://127.0.0.1:8082`
-
-El servicio se inicia con `npm start`.
-
----
-
-### Auth API (`auth-api/Dockerfile`)
-
-Para este microservicio usé una imagen base de `golang:1.20-alpine` para la etapa de compilación y luego una imagen final `alpine:3.18` más liviana.
-Compilé el binario principal `auth-api` y expuse el puerto `8000`.
-Las variables principales que definí fueron:
-
-* `AUTH_API_PORT=8000`
-* `USERS_API_ADDRESS=http://users-api:8083`
-* `JWT_SECRET=myfancysecret`
-
-Este servicio maneja la autenticación y validación de tokens JWT.
-
----
-
-### Users API (`users-api/Dockerfile`)
-
-Para este servicio utilicé `openjdk:8-jdk-alpine` e instalé **Maven** para compilar el proyecto Java.
-Construí el archivo JAR ejecutando `mvn clean package -DskipTests` y expuse el puerto `8083`.
-Definí las siguientes variables:
-
-* `JWT_SECRET=myfancysecret`
-* `SERVER_PORT=8083`
-
-El servicio ejecuta el archivo `target/users-api-0.0.1-SNAPSHOT.jar`.
-
----
-
-### Todos API (`todos-api/Dockerfile`)
-
-Este servicio lo desarrollé en **Node.js**, usando la imagen `node:14-alpine`.
-Copié los archivos `package.json`, instalé las dependencias y configuré el entorno para exponer el puerto `8082`.
-Las variables por defecto que establecí fueron:
-
-* `TODO_API_PORT=8082`
-* `JWT_SECRET=foo`
-* `REDIS_HOST=localhost`
-* `ZIPKIN_URL=http://127.0.0.1:9411/api/v2/spans`
-
-Finalmente, configuré el comando de inicio `node server.js`.
-
----
-
-### Log Message Processor (`log-message-processor/Dockerfile`)
-
-Este servicio lo construí con **Python 3.8**, partiendo de la imagen `python:3.8-slim`.
-Instalé las dependencias desde `requirements.txt`, expuse el puerto `8084` y configuré las siguientes variables:
-
-* `LOG_PROCESSOR_PORT=8084`
-* `REDIS_HOST=localhost`
-* `REDIS_CHANNEL=log_channel`
-
-El contenedor ejecuta `python main.py` al iniciarse.
-
----
-
-## 5. Verificación del despliegue
-
-Para asegurarme de que todos los servicios estaban funcionando correctamente, utilicé los siguientes comandos:
+#### 4️⃣ Revisar los servicios
 
 ```bash
-# Verifico los logs de un pod
-kubectl logs <nombre-del-pod>
-
-# Consulto los deployments y servicios activos
-kubectl get deployments
-kubectl get services
-
-# Escalo un servicio en caso de ser necesario
-kubectl scale deployment users-api --replicas=3
-
-# Elimino todos los recursos del despliegue
-kubectl delete -f deployment.yaml
+kubectl get svc --all-namespaces
 ```
 
----
+#### 5️⃣ Verificar las Network Policies
 
-## 6. Arquitectura general
-
-Representé la arquitectura general de la aplicación de la siguiente forma:
-
-```
-[ Frontend ] ⇄ [ Auth API ] ⇄ [ Users API ]
-      ↓
-   [ Todos API ] ⇄ [ Log Processor ]
+```bash
+kubectl get networkpolicy --all-namespaces
 ```
 
-Cada microservicio se ejecuta en su propio contenedor y se comunica con los demás mediante HTTP o Redis.
-Gracias a Kubernetes, logré implementar escalabilidad, balanceo de carga y mejor observabilidad de los componentes.
+#### 7️⃣ Consultar logs (por ejemplo, del Log Processor)
+
+```bash
+kubectl logs -l app=log-message-processor -n log-ns
+```
+
+EVIDENCIA DE FUNCIONAMIENTO 
+
+<img width="1920" height="933" alt="image" src="https://github.com/user-attachments/assets/2b95c7cf-3ede-4e25-a6d3-2380c9a1671f" />
+
+<img width="1920" height="933" alt="image" src="https://github.com/user-attachments/assets/abe0a070-6d9d-4de3-b8ec-97a508d2a77c" />
 
