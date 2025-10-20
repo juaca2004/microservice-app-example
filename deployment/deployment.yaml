@@ -1,15 +1,45 @@
-# Namespace
+# Namespace para frontend
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: microservices-demo
+  name: frontend-ns
+---
+# Namespace para auth-api
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: auth-ns
+---
+# Namespace para todos-api
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: todos-ns
+---
+# Namespace para users-api
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: users-ns
+---
+# Namespace para redis
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: redis-ns
+---
+# Namespace para log-message-processor
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: log-ns
 ---
 # Deployment con RollingUpdate (frontend)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
-  namespace: microservices-demo
+  namespace: frontend-ns
 spec:
   replicas: 2
   strategy:
@@ -29,9 +59,9 @@ spec:
             - containerPort: 8080
           env:
             - name: AUTH_API_ADDRESS
-              value: "http://auth-api:8000"
+              value: "http://auth-api.auth-ns.svc.cluster.local:8000"
             - name: TODOS_API_ADDRESS
-              value: "http://todos-api:8082"
+              value: "http://todos-api.todos-ns.svc.cluster.local:8082"
           resources:
             requests:
               cpu: "100m"
@@ -40,12 +70,48 @@ spec:
               cpu: "250m"
               memory: "256Mi"
 ---
+# Service para frontend
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: frontend-ns
+spec:
+  selector:
+    app: frontend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
+---
+# HPA para frontend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+  namespace: frontend-ns
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: frontend
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+---
 # Deployment con Recreate (auth-api)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: auth-api
-  namespace: microservices-demo
+  namespace: auth-ns
 spec:
   replicas: 1
   strategy:
@@ -67,31 +133,16 @@ spec:
             - name: AUTH_API_PORT
               value: "8000"
             - name: USERS_API_ADDRESS
-              value: "http://users-api:8083"
+              value: "http://users-api.users-ns.svc.cluster.local:8083"
             - name: JWT_SECRET
               value: "myfancysecret"
----
-# Service para frontend
-apiVersion: v1
-kind: Service
-metadata:
-  name: frontend
-  namespace: microservices-demo
-spec:
-  selector:
-    app: frontend
-  ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 8080
-  type: ClusterIP
 ---
 # Service para auth-api
 apiVersion: v1
 kind: Service
 metadata:
   name: auth-api
-  namespace: microservices-demo
+  namespace: auth-ns
 spec:
   selector:
     app: auth-api
@@ -101,88 +152,12 @@ spec:
       targetPort: 8000
   type: ClusterIP
 ---
----
-# NetworkPolicy: Denegar todo el tráfico entrante a Redis
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: deny-all-redis
-  namespace: microservices-demo
-spec:
-  podSelector:
-    matchLabels:
-      app: redis
-  policyTypes:
-    - Ingress
----
-# NetworkPolicy: Permitir solo a APIs y log-message-processor acceder a Redis
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-api-to-redis
-  namespace: microservices-demo
-spec:
-  podSelector:
-    matchLabels:
-      app: redis
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app: todos-api
-        - podSelector:
-            matchLabels:
-              app: log-message-processor
-      ports:
-        - protocol: TCP
-          port: 6379
----
-# NetworkPolicy: Permitir solo a frontend acceder a todos-api
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-frontend-to-todos-api
-  namespace: microservices-demo
-spec:
-  podSelector:
-    matchLabels:
-      app: todos-api
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app: frontend
-      ports:
-        - protocol: TCP
-          port: 8082
----
-# HPA para frontend
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: frontend-hpa
-  namespace: microservices-demo
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: frontend
-  minReplicas: 2
-  maxReplicas: 5
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 50
----
 # Deployment para todos-api
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: todos-api
-  namespace: microservices-demo
+  namespace: todos-ns
 spec:
   replicas: 1
   selector:
@@ -204,7 +179,7 @@ spec:
             - name: JWT_SECRET
               value: "myfancysecret"
             - name: REDIS_HOST
-              value: "redis"
+              value: "redis.redis-ns.svc.cluster.local"
             - name: REDIS_PORT
               value: "6379"
             - name: REDIS_CHANNEL
@@ -215,7 +190,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: todos-api
-  namespace: microservices-demo
+  namespace: todos-ns
 spec:
   selector:
     app: todos-api
@@ -230,7 +205,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: users-api
-  namespace: microservices-demo
+  namespace: users-ns
 spec:
   replicas: 1
   selector:
@@ -257,7 +232,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: users-api
-  namespace: microservices-demo
+  namespace: users-ns
 spec:
   selector:
     app: users-api
@@ -272,7 +247,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: log-message-processor
-  namespace: microservices-demo
+  namespace: log-ns
 spec:
   replicas: 1
   selector:
@@ -288,7 +263,7 @@ spec:
           image: juaca2004/logmessageprocessor:latest
           env:
             - name: REDIS_HOST
-              value: "redis"
+              value: "redis.redis-ns.svc.cluster.local"
             - name: REDIS_PORT
               value: "6379"
             - name: REDIS_CHANNEL
@@ -299,7 +274,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: redis
-  namespace: microservices-demo
+  namespace: redis-ns
 spec:
   replicas: 1
   selector:
@@ -321,7 +296,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: redis
-  namespace: microservices-demo
+  namespace: redis-ns
 spec:
   selector:
     app: redis
@@ -330,3 +305,319 @@ spec:
       port: 6379
       targetPort: 6379
   type: ClusterIP
+
+
+---
+# 🔒 Default deny para todos los namespaces
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: frontend-ns
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: auth-ns
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: users-ns
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: todos-ns
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: redis-ns
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: log-ns
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# 🌐 Permitir tráfico de Internet al frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-allow-ingress
+  namespace: frontend-ns
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: TCP
+      port: 8080
+---
+# 🌐 Egress desde frontend hacia auth y todos + DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-allow-egress
+  namespace: frontend-ns
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+  - Egress
+  egress:
+  # DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # auth-api
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: auth-ns
+      podSelector:
+        matchLabels:
+          app: auth-api
+    ports:
+    - protocol: TCP
+      port: 8000
+  # todos-api
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: todos-ns
+      podSelector:
+        matchLabels:
+          app: todos-api
+    ports:
+    - protocol: TCP
+      port: 8082
+---
+# 🔐 auth-api permite ingreso solo desde frontend y egreso solo hacia users-api + DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-api-allow-ingress
+  namespace: auth-ns
+spec:
+  podSelector:
+    matchLabels:
+      app: auth-api
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: frontend-ns
+      podSelector:
+        matchLabels:
+          app: frontend
+    ports:
+    - protocol: TCP
+      port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-api-allow-egress
+  namespace: auth-ns
+spec:
+  podSelector:
+    matchLabels:
+      app: auth-api
+  policyTypes:
+  - Egress
+  egress:
+  # DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+  # users-api
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: users-ns
+      podSelector:
+        matchLabels:
+          app: users-api
+    ports:
+    - protocol: TCP
+      port: 8083
+---
+# 👥 users-api permite solo conexión desde auth-api
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: users-api-allow-ingress
+  namespace: users-ns
+spec:
+  podSelector:
+    matchLabels:
+      app: users-api
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: auth-ns
+      podSelector:
+        matchLabels:
+          app: auth-api
+    ports:
+    - protocol: TCP
+      port: 8083
+---
+# 📝 todos-api solo permite tráfico desde frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: todos-api-allow-ingress
+  namespace: todos-ns
+spec:
+  podSelector:
+    matchLabels:
+      app: todos-api
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: frontend-ns
+      podSelector:
+        matchLabels:
+          app: frontend
+    ports:
+    - protocol: TCP
+      port: 8082
+---
+# 💾 Redis permite ingreso desde todos-api y log-processor
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-allow-ingress
+  namespace: redis-ns
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: todos-ns
+      podSelector:
+        matchLabels:
+          app: todos-api
+    ports:
+    - protocol: TCP
+      port: 6379
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: log-ns
+      podSelector:
+        matchLabels:
+          app: log-message-processor
+    ports:
+    - protocol: TCP
+      port: 6379
+---
+# 🧾 Log-message-processor puede salir hacia Redis y DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: log-egress-redis
+  namespace: log-ns
+spec:
+  podSelector:
+    matchLabels:
+      app: log-message-processor
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: redis-ns
+      podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
