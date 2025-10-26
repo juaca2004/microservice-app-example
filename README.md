@@ -101,7 +101,11 @@ El archivo `deployment.yaml` contiene los siguientes recursos de Kubernetes:
 3. **HPA (Horizontal Pod Autoscaler):**
    Solo el `frontend` cuenta con un `HPA` configurado para escalar entre 2 y 5 réplicas según uso de CPU.
 
-4. **Network Policies:**
+4. **Tecnicas de despliegue:**
+   Para la creacion de este aplicacion uso 2 tecnicas de depligue. La primera es Rolling Update. Esta es la estrategia de despliegue por defecto y la más común para lograr cero tiempo de inactividad (zero-downtime).
+   La uso para la creacion de frontend, Kubernetes despliega los Pods de la nueva versión gradualmente, uno a uno, esperando a que el Pod anterior esté listo antes de terminar con el Pod viejo. Esto asegura que el servicio      siempre esté disponible. La segunda estrategia que uso es Recreate (Recreación). Esta es una estrategia de alto impacto que garantiza que solo una versión de la aplicación esté corriendo en cualquier momento, pero causa      tiempo de inactividad (downtime). La uso en este caso para el deployment auth-api. Kubernetes termina todos los Pods de la versión anterior antes de crear los Pods de la nueva versión.
+
+6. **Network Policies:**
    Se definen **políticas de red de seguridad (NetworkPolicy)** que limitan la comunicación entre servicios para reducir la superficie de ataque:
 
    * `default-deny-all` para todos los namespaces (bloquea todo tráfico por defecto).
@@ -176,11 +180,59 @@ kubectl get networkpolicy --all-namespaces
 
 ```bash
 kubectl logs -l app=log-message-processor -n log-ns
+
 ```
+
+###  **Grafana y prometheus**
+
+Con la intecion de mayor monitoreo de nuestro cluster, instalamos promtheus y grafana. Gracias estas herramientas nos permitiran monitorear nuestro cluster de manera mas detallar y personalizada, al poder escoger el dashboard que mas nos convenga.
+
+Lo primera que haces es descargar prometheus.
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+helm install prometheus prometheus-community/prometheus -n prometheus --create-namespace
+```
+Para asegurarnos de que la instalación finalizó con éxito puedes listar los pods.
+```bash
+kubectl get pods -n prometheus
+```
+Una vez que tengamos instalado nuestro Prometheus, necesitamos un controlador de Ingress para acceder a la interfaz gráfica. Para habilitar esto en minikube debes ejecutar el siguiente comando:
+
+```bash
+minikube addons enable ingress
+```
+Creamos un servicio para rederigir el trafico en este caso el servicio es un ngnix confiurado en el archivo ingress.yaml
+
+Una vez habilitado debemos aplicar el siguiente manifiesto y añadir una entrada en el /etc/hosts apuntando el dns de nuestro servicio a la ip del Ingress.
+<img width="1699" height="1341" alt="image" src="https://github.com/user-attachments/assets/33eda276-786a-4153-b21a-7f852884e84a" />
+
+Luego instalamos grafana siguiendo un procedimiento similar
+
+```bash
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+helm install grafana grafana/grafana --namespace monitoreo --create-namespace
+# 1. Obtener el nombre del secreto
+SECRET_NAME=$(kubectl get secret --namespace monitoreo -l "app.kubernetes.io/name=grafana,app.kubernetes.io/instance=grafana" -o jsonpath="{.items[0].metadata.name}")
+
+# 2. Decodificar y mostrar la contraseña
+kubectl get secret --namespace monitoreo $SECRET_NAME -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+```
+
+Podemos crear un svc para grafana pero perferi hacer un port-forwarding al pod de grafana por practicidad.
+
+Despues de añadir la url de prometheus y importar un dashboard, podemos ver a grafana funcionando.
+
+<img width="1413" height="925" alt="image" src="https://github.com/user-attachments/assets/06223fdd-6f96-4b26-9d01-dd538597ce47" />
+
+<img width="1406" height="634" alt="image" src="https://github.com/user-attachments/assets/b41ae6ed-df5f-491f-a4a2-6b57079d7581" />
+
 
 EVIDENCIA DE FUNCIONAMIENTO 
 
 <img width="1920" height="933" alt="image" src="https://github.com/user-attachments/assets/2b95c7cf-3ede-4e25-a6d3-2380c9a1671f" />
 
 <img width="1920" height="933" alt="image" src="https://github.com/user-attachments/assets/abe0a070-6d9d-4de3-b8ec-97a508d2a77c" />
+
 
