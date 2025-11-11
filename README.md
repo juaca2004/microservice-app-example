@@ -136,6 +136,39 @@ spec:
 ```
 
 ---
+Secrets
+
+JWT secrets are stored securely in each API’s namespace using Kubernetes Secrets of type Opaque.
+These secrets store the base64-encoded JWT key shared across the auth-api, users-api, and todos-api services.
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jwt-secret
+  namespace: auth-ns
+type: Opaque
+data:
+  JWT_SECRET: bXlmYW5jeXNlY3JldA== 
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jwt-secret
+  namespace: users-ns
+type: Opaque
+data:
+  JWT_SECRET: bXlmYW5jeXNlY3JldA==
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jwt-secret
+  namespace: todos-ns
+type: Opaque
+data:
+  JWT_SECRET: bXlmYW5jeXNlY3JldA==
+
+``
 
 ### 3. **Horizontal Pod Autoscaler (HPA)**
 
@@ -304,6 +337,7 @@ After adding Prometheus as a data source and importing a dashboard, Grafana will
 <img width="1413" height="925" alt="image" src="https://github.com/user-attachments/assets/06223fdd-6f96-4b26-9d01-dd538597ce47" />
 
 <img width="1406" height="634" alt="image" src="https://github.com/user-attachments/assets/b41ae6ed-df5f-491f-a4a2-6b57079d7581" />
+
 
 
 
