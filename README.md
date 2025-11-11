@@ -129,7 +129,7 @@ El modelo de seguridad se basa en el principio de **"zero trust"**:
 
 ---
 
-### ⚙️ **Variables de entorno clave**
+### **Variables de entorno clave**
 
 | Variable                   | Servicio                       | Descripción                         |
 | -------------------------- | ------------------------------ | ----------------------------------- |
@@ -234,6 +234,7 @@ EVIDENCIA DE FUNCIONAMIENTO
 <img width="1920" height="933" alt="image" src="https://github.com/user-attachments/assets/2b95c7cf-3ede-4e25-a6d3-2380c9a1671f" />
 
 <img width="1920" height="933" alt="image" src="https://github.com/user-attachments/assets/abe0a070-6d9d-4de3-b8ec-97a508d2a77c" />
+
 
 
 
