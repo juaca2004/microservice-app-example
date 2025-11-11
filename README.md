@@ -168,7 +168,7 @@ type: Opaque
 data:
   JWT_SECRET: bXlmYW5jeXNlY3JldA==
 
-``
+```
 
 ### 3. **Horizontal Pod Autoscaler (HPA)**
 
@@ -337,6 +337,7 @@ After adding Prometheus as a data source and importing a dashboard, Grafana will
 <img width="1413" height="925" alt="image" src="https://github.com/user-attachments/assets/06223fdd-6f96-4b26-9d01-dd538597ce47" />
 
 <img width="1406" height="634" alt="image" src="https://github.com/user-attachments/assets/b41ae6ed-df5f-491f-a4a2-6b57079d7581" />
+
 
 
 
