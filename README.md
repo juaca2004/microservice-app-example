@@ -81,7 +81,7 @@ docker run -p 8080:8080 frontend-service
 En esta etapa, configuré las variables de entorno necesarias dentro de cada contenedor según las dependencias entre servicios (por ejemplo, la URL del servicio de autenticación en el frontend).
 
 
-### 📂 **Estructura del manifiesto**
+### **Estructura del manifiesto**
 
 El archivo `deployment.yaml` contiene los siguientes recursos de Kubernetes:
 
@@ -119,7 +119,7 @@ El archivo `deployment.yaml` contiene los siguientes recursos de Kubernetes:
 
 ---
 
-### 🔒 **Seguridad de red**
+### **Seguridad de red**
 
 El modelo de seguridad se basa en el principio de **"zero trust"**:
 
@@ -141,42 +141,42 @@ El modelo de seguridad se basa en el principio de **"zero trust"**:
 
 ---
 
-### 🚀 **Comandos para despliegue**
+### **Comandos para despliegue**
 
 Asegúrate de estar en el directorio donde se encuentra el archivo `deployment.yaml`.
 
-#### 1️⃣ Crear todos los recursos
+####  Crear todos los recursos
 
 ```bash
 kubectl apply -f deployment.yaml
 ```
 
-#### 2️⃣ Verificar los namespaces creados
+####  Verificar los namespaces creados
 
 ```bash
 kubectl get namespaces
 ```
 
-#### 3️⃣ Comprobar los deployments y pods
+####  Comprobar los deployments y pods
 
 ```bash
 kubectl get deployments --all-namespaces
 kubectl get pods --all-namespaces
 ```
 
-#### 4️⃣ Revisar los servicios
+#### Revisar los servicios
 
 ```bash
 kubectl get svc --all-namespaces
 ```
 
-#### 5️⃣ Verificar las Network Policies
+#### Verificar las Network Policies
 
 ```bash
 kubectl get networkpolicy --all-namespaces
 ```
 
-#### 7️⃣ Consultar logs (por ejemplo, del Log Processor)
+#### Consultar logs 
 
 ```bash
 kubectl logs -l app=log-message-processor -n log-ns
@@ -234,5 +234,6 @@ EVIDENCIA DE FUNCIONAMIENTO
 <img width="1920" height="933" alt="image" src="https://github.com/user-attachments/assets/2b95c7cf-3ede-4e25-a6d3-2380c9a1671f" />
 
 <img width="1920" height="933" alt="image" src="https://github.com/user-attachments/assets/abe0a070-6d9d-4de3-b8ec-97a508d2a77c" />
+
 
 
