@@ -301,14 +301,10 @@ After adding Prometheus as a data source and importing a dashboard, Grafana will
 ![Cluster Running Example 1](https://github.com/user-attachments/assets/2b95c7cf-3ede-4e25-a6d3-2380c9a1671f)
 ![Cluster Running Example 2](https://github.com/user-attachments/assets/abe0a070-6d9d-4de3-b8ec-97a508d2a77c)
 
----
-
-Would you like me to add a **“Project Summary” and “Technologies Used”** section at the top (like a professional README for GitHub)? It makes it look more complete and formal.
-
-
 <img width="1413" height="925" alt="image" src="https://github.com/user-attachments/assets/06223fdd-6f96-4b26-9d01-dd538597ce47" />
 
 <img width="1406" height="634" alt="image" src="https://github.com/user-attachments/assets/b41ae6ed-df5f-491f-a4a2-6b57079d7581" />
+
 
 
 
