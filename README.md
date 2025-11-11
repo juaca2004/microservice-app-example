@@ -45,20 +45,21 @@ Para construir las imágenes, me ubiqué en la raíz del proyecto y ejecuté los
 Cada uno genera una imagen lista para ejecutar su respectivo servicio. Ademas se subid cada uno a dockerHub para su posterior utilizacion en kubectl
 
 ```bash
-# Construyo la imagen del frontend
-docker build -t frontend-service -f ./frontend/Dockerfile .
+# Build frontend image
+docker build -t juaca2004/frontendmicroservice -f ./frontend/Dockerfile .
 
-# Construyo la imagen del Auth API (Go)
-docker build -t auth-api-service -f ./auth-api/Dockerfile .
+# Build Auth API image
+docker build -t juaca2004/authapi -f ./auth-api/Dockerfile .
 
-# Construyo la imagen del Users API (Java + Maven)
-docker build -t users-api-service -f ./users-api/Dockerfile .
+# Build Users API image
+docker build -t juaca2004/userapi -f ./users-api/Dockerfile .
 
-# Construyo la imagen del Todos API (Node.js)
-docker build -t todos-api-service -f ./todos-api/Dockerfile .
+# Build Todos API image
+docker build -t juaca2004/todosapi -f ./todos-api/Dockerfile .
 
-# Construyo la imagen del Log Processor (Python)
-docker build -t log-processor-service -f ./log-message-processor/Dockerfile .
+# Build Log Processor image
+docker build -t juaca2004/logmessageprocessor -f ./log-message-processor/Dockerfile .
+
 ```
 
 ---
@@ -68,14 +69,9 @@ docker build -t log-processor-service -f ./log-message-processor/Dockerfile .
 Antes de realizar el despliegue en Kubernetes, probé los contenedores de forma local para asegurarme de que cada servicio funcionara correctamente.
 
 ```bash
-# Ejecuto el Auth API
-docker run -p 8000:8000 auth-api-service
-
-# Ejecuto el Users API
-docker run -p 8083:8083 users-api-service
-
-# Ejecuto el Frontend
-docker run -p 8080:8080 frontend-service
+docker run -p 8080:8080 juaca2004/frontendmicroservice
+docker run -p 8000:8000 juaca2004/authapi
+docker run -p 8083:8083 juaca2004/userapi
 ```
 
 En esta etapa, configuré las variables de entorno necesarias dentro de cada contenedor según las dependencias entre servicios (por ejemplo, la URL del servicio de autenticación en el frontend).
@@ -97,15 +93,59 @@ El archivo `deployment.yaml` contiene los siguientes recursos de Kubernetes:
 
 2. **Deployments y Services:**
    Cada microservicio cuenta con su propio `Deployment` y `Service` tipo `ClusterIP`, garantizando comunicación interna estable mediante `Service DNS`.
+   Example (frontend):
+   ```bash
+   apiVersion: apps/v1
+   kind: Deployment
+   metadata:
+     name: frontend
+     namespace: frontend-ns
+   spec:
+     replicas: 2
+     strategy:
+       type: RollingUpdate
 
-3. **HPA (Horizontal Pod Autoscaler):**
+   ```
+   Service for frontend:
+      ```bash
+   apiVersion: v1
+   kind: Service
+   metadata:
+     name: frontend
+     namespace: frontend-ns
+   spec:
+     type: ClusterIP
+     ports:
+       - port: 80
+         targetPort: 8080
+
+   ```
+
+4. **HPA (Horizontal Pod Autoscaler):**
    Solo el `frontend` cuenta con un `HPA` configurado para escalar entre 2 y 5 réplicas según uso de CPU.
+   
+      ```bash
+   apiVersion: autoscaling/v2
+   kind: HorizontalPodAutoscaler
+   metadata:
+     name: frontend-hpa
+   spec:
+     minReplicas: 2
+     maxReplicas: 5
+     metrics:
+       - type: Resource
+         resource:
+           name: cpu
+           target:
+             type: Utilization
+             averageUtilization: 50
 
-4. **Tecnicas de despliegue:**
+   ```
+6. **Tecnicas de despliegue:**
    Para la creacion de este aplicacion uso 2 tecnicas de depligue. La primera es Rolling Update. Esta es la estrategia de despliegue por defecto y la más común para lograr cero tiempo de inactividad (zero-downtime).
    La uso para la creacion de frontend, Kubernetes despliega los Pods de la nueva versión gradualmente, uno a uno, esperando a que el Pod anterior esté listo antes de terminar con el Pod viejo. Esto asegura que el servicio      siempre esté disponible. La segunda estrategia que uso es Recreate (Recreación). Esta es una estrategia de alto impacto que garantiza que solo una versión de la aplicación esté corriendo en cualquier momento, pero causa      tiempo de inactividad (downtime). La uso en este caso para el deployment auth-api. Kubernetes termina todos los Pods de la versión anterior antes de crear los Pods de la nueva versión.
 
-6. **Network Policies:**
+7. **Network Policies:**
    Se definen **políticas de red de seguridad (NetworkPolicy)** que limitan la comunicación entre servicios para reducir la superficie de ataque:
 
    * `default-deny-all` para todos los namespaces (bloquea todo tráfico por defecto).
@@ -234,6 +274,7 @@ EVIDENCIA DE FUNCIONAMIENTO
 <img width="1920" height="933" alt="image" src="https://github.com/user-attachments/assets/2b95c7cf-3ede-4e25-a6d3-2380c9a1671f" />
 
 <img width="1920" height="933" alt="image" src="https://github.com/user-attachments/assets/abe0a070-6d9d-4de3-b8ec-97a508d2a77c" />
+
 
 
 
